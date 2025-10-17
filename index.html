@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Drive‑to‑Work Tracker</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121832; --ink:#e8ecff; --muted:#9aa4c7; --accent:#6aa3ff; --ok:#5dd39e; --warn:#ffb86b; }
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b1020 0%,#0e1430 100%);color:var(--ink);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px 32px}
+    h1{font-weight:750;letter-spacing:.2px;margin:0 0 6px}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .card{background:rgba(255,255,255,.03);backdrop-filter:saturate(120%) blur(8px);border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .toolbar{padding:12px}
+    .toolbar .row>*{height:38px}
+    button,select,input[type="date"],input[type="file"],.pill{background:var(--card);border:1px solid rgba(255,255,255,.12);color:var(--ink);padding:8px 12px;border-radius:10px}
+    button{cursor:pointer;transition:.15s transform, .15s background}
+    button:hover{transform:translateY(-1px)}
+    button.primary{background:var(--accent);border-color:transparent;color:#0a0f22;font-weight:700}
+    .pill{display:inline-flex;align-items:center;gap:8px}
+    .calendar{margin-top:12px}
+    .cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:8px 10px}
+    .cal-head .dow{font-size:.83rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:center}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:0 10px 12px}
+    .day{aspect-ratio:1/1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:12px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}
+    .day .date{font-size:.9rem;padding:8px 9px;color:var(--muted)}
+    .day .tick{display:flex;align-items:center;justify-content:center;margin:0 8px 10px;height:34px;border-radius:10px;border:1px dashed rgba(255,255,255,.18);cursor:pointer;user-select:none}
+    .day.marked{outline:2px solid rgba(93,211,158,.5)}
+    .day.marked .tick{border-style:solid;background:rgba(93,211,158,.12)}
+    .day.other-month{opacity:.38}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px}
+    .stat{padding:12px 14px}
+    .stat h3{margin:0 0 6px;font-size:.95rem;color:var(--muted)}
+    .stat .big{font-size:1.6rem;font-weight:800}
+    .footer{padding:14px;color:var(--muted);font-size:.9rem}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:800px){.stats{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}}
+    a.link{color:var(--accent);text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🚗 Drive‑to‑Work Tracker</h1>
+    <div class="muted">Click a day to toggle a checkmark. Everything saves automatically to your browser (local only).</div>
+
+    <div class="card toolbar" role="region" aria-label="Calendar controls">
+      <div class="row">
+        <button id="prevBtn" aria-label="Previous month">◀︎</button>
+        <div class="pill" aria-live="polite"><strong id="monthLabel">Month YYYY</strong></div>
+        <button id="nextBtn" aria-label="Next month">▶︎</button>
+        <button id="todayBtn">Today</button>
+        <label class="pill" style="gap:6px;">Year
+          <select id="yearSelect" title="Jump to year"></select>
+        </label>
+        <label class="pill" style="gap:6px;">Month
+          <select id="monthSelect" title="Jump to month"></select>
+        </label>
+        <button id="clearMonthBtn" title="Unmark all in visible month">Clear Month</button>
+      </div>
+    </div>
+
+    <div class="card calendar" id="calendar"></div>
+
+    <div class="card stats" aria-label="Statistics">
+      <div class="stat">
+        <h3>This month</h3>
+        <div class="big" id="mCount">0</div>
+      </div>
+      <div class="stat">
+        <h3>This year</h3>
+        <div class="big" id="yCount">0</div>
+      </div>
+      <div class="stat">
+        <h3>All time</h3>
+        <div class="big" id="allCount">0</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card toolbar" aria-label="Quick totals by year">
+        <div class="row">
+          <label class="pill" style="gap:6px;">Count year
+            <select id="countYear"></select>
+          </label>
+          <button class="primary" id="countYearBtn">Count</button>
+          <div class="pill" aria-live="polite">Total: <strong id="countYearOut">0</strong></div>
+        </div>
+      </div>
+
+      <div class="card toolbar" aria-label="Count within date range">
+        <div class="row">
+          <label class="pill">From <input type="date" id="fromDate"></label>
+          <label class="pill">To <input type="date" id="toDate"></label>
+          <button class="primary" id="rangeBtn">Count Range</button>
+          <div class="pill" aria-live="polite">Total: <strong id="rangeOut">0</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:12px;">
+      <div class="card toolbar" aria-label="Backup & restore">
+        <div class="row">
+          <button id="exportBtn">Export Data (.json)</button>
+          <label class="pill">Import <input type="file" id="importFile" accept="application/json"></label>
+          <button id="resetBtn" title="Erase all stored data" style="margin-left:auto;background:#2b1b22;border-color:#633;">Reset All</button>
+        </div>
+      </div>
+
+      <div class="card footer">
+        Works entirely offline. Your marks are stored in <em>localStorage</em> on this device. 
+        You can safely mark past days (e.g., all of 2024) and use the counters above. 
+        Tip: Use Export to back up or move your data between browsers.
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    const STORAGE_KEY = 'drive_work_days_v1';
+    /** data model: { 'YYYY-MM-DD': true } */
+    let store = load();
+
+    const calEl = document.getElementById('calendar');
+    const monthLabel = document.getElementById('monthLabel');
+    const mCountEl = document.getElementById('mCount');
+    const yCountEl = document.getElementById('yCount');
+    const allCountEl = document.getElementById('allCount');
+
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const todayBtn = document.getElementById('todayBtn');
+    const clearMonthBtn = document.getElementById('clearMonthBtn');
+
+    const yearSelect = document.getElementById('yearSelect');
+    const monthSelect = document.getElementById('monthSelect');
+
+    const countYearSel = document.getElementById('countYear');
+    const countYearBtn = document.getElementById('countYearBtn');
+    const countYearOut = document.getElementById('countYearOut');
+
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+    const rangeBtn = document.getElementById('rangeBtn');
+    const rangeOut = document.getElementById('rangeOut');
+
+    const exportBtn = document.getElementById('exportBtn');
+    const importFile = document.getElementById('importFile');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // current view state
+    let view = new Date(); // today
+    view.setDate(1);
+
+    initSelectors();
+    render();
+
+    prevBtn.onclick = ()=>{ view.setMonth(view.getMonth()-1); syncSelectors(); render(); };
+    nextBtn.onclick = ()=>{ view.setMonth(view.getMonth()+1); syncSelectors(); render(); };
+    todayBtn.onclick = ()=>{ const d=new Date(); view = new Date(d.getFullYear(), d.getMonth(), 1); syncSelectors(); render(); };
+    clearMonthBtn.onclick = ()=>{ clearVisibleMonth(); render(); };
+
+    yearSelect.onchange = ()=>{ view.setFullYear(parseInt(yearSelect.value,10)); render(); };
+    monthSelect.onchange = ()=>{ view.setMonth(parseInt(monthSelect.value,10)); render(); };
+
+    countYearBtn.onclick = ()=>{ const y = parseInt(countYearSel.value,10); countYearOut.textContent = countYear(y); };
+
+    rangeBtn.onclick = ()=>{
+      const a = fromDate.value ? new Date(fromDate.value) : null;
+      const b = toDate.value ? new Date(toDate.value) : null;
+      if(!a || !b || a>b){ rangeOut.textContent = '—'; return; }
+      rangeOut.textContent = countRange(a,b);
+    };
+
+    exportBtn.onclick = ()=>{
+      const blob = new Blob([JSON.stringify(store, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'drive-to-work-data.json'; a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    importFile.onchange = (e)=>{
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        try{
+          const data = JSON.parse(fr.result);
+          if(typeof data === 'object' && data){ store = data; save(); render(); alert('Import complete.'); }
+          else{ alert('Invalid file.'); }
+        }catch(err){ alert('Invalid JSON.'); }
+      };
+      fr.readAsText(file);
+    };
+
+    resetBtn.onclick = ()=>{
+      if(confirm('Erase all saved marks? This cannot be undone.')){ store = {}; save(); render(); }
+    };
+
+    function initSelectors(){
+      // years range: 2015..current+2 for convenience
+      const thisYear = new Date().getFullYear();
+      const years = [];
+      for(let y=2015; y<=thisYear+2; y++) years.push(y);
+      yearSelect.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+      countYearSel.innerHTML = yearSelect.innerHTML;
+
+      monthSelect.innerHTML = months().map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+      syncSelectors();
+
+      // Pre-fill quick count selector with 2024 selected if present
+      const idx2024 = years.indexOf(2024);
+      if(idx2024>=0) countYearSel.selectedIndex = idx2024;
+    }
+
+    function syncSelectors(){
+      yearSelect.value = String(view.getFullYear());
+      monthSelect.value = String(view.getMonth());
+      monthLabel.textContent = months()[view.getMonth()] + ' ' + view.getFullYear();
+    }
+
+    function render(){
+      // header
+      calEl.innerHTML = `
+        <div class="cal-head">${weekdays().map(d=>`<div class="dow">${d}</div>`).join('')}</div>
+        <div class="cal-grid" id="calGrid"></div>
+      `;
+      const grid = calEl.querySelector('#calGrid');
+
+      const firstDay = firstDayOfCalendar(view.getFullYear(), view.getMonth());
+      const totalCells = 42; // 6 weeks grid
+
+      for(let i=0;i<totalCells;i++){
+        const d = addDays(firstDay, i);
+        const inMonth = d.getMonth() === view.getMonth();
+        const key = toKey(d);
+        const marked = !!store[key];
+
+        const div = document.createElement('div');
+        div.className = 'day' + (marked?' marked':'') + (inMonth?'':' other-month');
+        div.setAttribute('data-date', key);
+        div.innerHTML = `
+          <div class="date">${d.getDate()}</div>
+          <div class="tick" role="button" aria-pressed="${marked}" title="Toggle drive mark">${marked ? '✔︎ Marked' : 'Mark'}</div>
+        `;
+        div.querySelector('.tick').onclick = ()=> toggleDate(key, div);
+        grid.appendChild(div);
+      }
+
+      // stats
+      const now = new Date();
+      mCountEl.textContent = countMonth(view.getFullYear(), view.getMonth());
+      yCountEl.textContent = countYear(view.getFullYear());
+      allCountEl.textContent = Object.keys(store).length;
+
+      // set range inputs defaults to current visible month
+      const start = new Date(view.getFullYear(), view.getMonth(), 1);
+      const end = new Date(view.getFullYear(), view.getMonth()+1, 0);
+      fromDate.value = toISO(start);
+      toDate.value = toISO(end);
+    }
+
+    function toggleDate(key, el){
+      if(store[key]) delete store[key]; else store[key] = true;
+      save();
+      // update cell
+      const marked = !!store[key];
+      el.classList.toggle('marked', marked);
+      el.querySelector('.tick').textContent = marked ? '✔︎ Marked' : 'Mark';
+      el.querySelector('.tick').setAttribute('aria-pressed', marked);
+      // update counters live
+      mCountEl.textContent = countMonth(view.getFullYear(), view.getMonth());
+      yCountEl.textContent = countYear(view.getFullYear());
+      allCountEl.textContent = Object.keys(store).length;
+    }
+
+    function clearVisibleMonth(){
+      const y=view.getFullYear(), m=view.getMonth();
+      const start = new Date(y,m,1); const end = new Date(y,m+1,0);
+      iterateDates(start,end,(d)=>{ const k=toKey(d); if(store[k]) delete store[k]; });
+      save();
+    }
+
+    // counting helpers
+    function countYear(y){
+      const start = new Date(y,0,1); const end = new Date(y,11,31);
+      let n=0; iterateDates(start,end,(d)=>{ if(store[toKey(d)]) n++; });
+      return n;
+    }
+    function countMonth(y,m){
+      const start = new Date(y,m,1); const end = new Date(y,m+1,0);
+      let n=0; iterateDates(start,end,(d)=>{ if(store[toKey(d)]) n++; });
+      return n;
+    }
+    function countRange(a,b){
+      let n=0; iterateDates(a,b,(d)=>{ if(store[toKey(d)]) n++; });
+      return n;
+    }
+
+    // date utilities
+    function weekdays(){ return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']; }
+    function months(){ return ['January','February','March','April','May','June','July','August','September','October','November','December']; }
+    function firstDayOfCalendar(y,m){
+      // start of month
+      const d = new Date(y,m,1);
+      // get day index Monday=0..Sunday=6
+      let idx = (d.getDay()+6)%7; // JS: 0=Sun
+      const start = addDays(d, -idx);
+      return start;
+    }
+    function addDays(d,days){ const x=new Date(d); x.setDate(x.getDate()+days); return x; }
+    function toKey(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+    function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    function iterateDates(a,b,fn){ const d=new Date(a); while(d<=b){ fn(d); d.setDate(d.getDate()+1); } }
+
+    // storage
+    function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }
+    function load(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }catch(e){ return {}; } }
+  })();
+  </script>
+</body>
+</html>

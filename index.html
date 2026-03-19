@@ -30,11 +30,11 @@
     .day.marked{outline:2px solid rgba(93,211,158,.5)}
     .day.marked .tick{border-style:solid;background:rgba(93,211,158,.12)}
     .day.other-month{opacity:.38}
-    .mil-wrap{margin:4px 8px 8px;display:flex;align-items:center;gap:4px}
-    .mil-input{background:rgba(255,255,255,.06);border:1px solid rgba(201,163,255,.2);color:var(--mil);padding:3px 6px;border-radius:7px;font-size:.78rem;width:100%;box-sizing:border-box;-moz-appearance:textfield;appearance:textfield}
-    .mil-input::-webkit-outer-spin-button,.mil-input::-webkit-inner-spin-button{-webkit-appearance:none}
-    .mil-input:focus{outline:none;border-color:rgba(201,163,255,.6);background:rgba(201,163,255,.08)}
-    .mil-input::placeholder{color:rgba(201,163,255,.35)}
+    .odo-wrap{margin:4px 8px 8px;display:flex;align-items:center;gap:4px}
+    .odo-input{background:rgba(255,255,255,.06);border:1px solid rgba(201,163,255,.2);color:var(--mil);padding:3px 6px;border-radius:7px;font-size:.78rem;width:100%;box-sizing:border-box;-moz-appearance:textfield;appearance:textfield}
+    .odo-input::-webkit-outer-spin-button,.odo-input::-webkit-inner-spin-button{-webkit-appearance:none}
+    .odo-input:focus{outline:none;border-color:rgba(201,163,255,.6);background:rgba(201,163,255,.08)}
+    .odo-input::placeholder{color:rgba(201,163,255,.35)}
     .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px}
     .stat{padding:12px 14px}
     .stat h3{margin:0 0 6px;font-size:.95rem;color:var(--muted)}
@@ -49,7 +49,7 @@
 <body>
   <div class="wrap">
     <h1>🚗 Drive‑to‑Work Tracker</h1>
-    <div class="muted">Klicka en dag för att markera körning. Fyll i antal mil (valfritt) — bra för resersättning och årskilometer till försäkringen. Sparas automatiskt lokalt.</div>
+    <div class="muted">Klicka en dag för att markera körning. Fyll i mätarställning (valfritt) — bra för resersättning och årskilometer till försäkringen. Sparas automatiskt lokalt.</div>
 
     <div class="card toolbar" role="region" aria-label="Calendar controls">
       <div class="row">
@@ -73,17 +73,17 @@
       <div class="stat">
         <h3>This month</h3>
         <div class="big" id="mCount">0</div>
-        <div class="sub" id="mMil">0 mil</div>
+        <div class="sub" id="mMil">— mil</div>
       </div>
       <div class="stat">
         <h3>This year</h3>
         <div class="big" id="yCount">0</div>
-        <div class="sub" id="yMil">0 mil</div>
+        <div class="sub" id="yMil">— mil</div>
       </div>
       <div class="stat">
         <h3>All time</h3>
         <div class="big" id="allCount">0</div>
-        <div class="sub" id="allMil">0 mil</div>
+        <div class="sub" id="allMil">— mil</div>
       </div>
     </div>
 
@@ -95,7 +95,7 @@
           </label>
           <button class="primary" id="countYearBtn">Count</button>
           <div class="pill" aria-live="polite">Days: <strong id="countYearOut">0</strong></div>
-          <div class="pill" aria-live="polite" style="color:var(--mil)">Mil: <strong id="countYearMil">0</strong></div>
+          <div class="pill" aria-live="polite" style="color:var(--mil)">Mil: <strong id="countYearMil">—</strong></div>
         </div>
       </div>
 
@@ -105,7 +105,7 @@
           <label class="pill">To <input type="date" id="toDate"></label>
           <button class="primary" id="rangeBtn">Count Range</button>
           <div class="pill" aria-live="polite">Days: <strong id="rangeOut">0</strong></div>
-          <div class="pill" aria-live="polite" style="color:var(--mil)">Mil: <strong id="rangeMil">0</strong></div>
+          <div class="pill" aria-live="polite" style="color:var(--mil)">Mil: <strong id="rangeMil">—</strong></div>
         </div>
       </div>
     </div>
@@ -120,8 +120,8 @@
       </div>
 
       <div class="card footer">
-        Works entirely offline. Your marks and mil are stored in <em>localStorage</em> on this device.
-        Mil per day is optional — enter it when convenient for resersättning or yearly insurance tracking.
+        Works entirely offline. Your marks and mätarställning are stored in <em>localStorage</em> on this device.
+        Mätarställning is optional — enter it occasionally and the app calculates driven mil as the difference between readings.
         Tip: Use Export to back up or move your data between browsers.
       </div>
     </div>
@@ -130,13 +130,16 @@
   <script>
   (function(){
     const STORAGE_KEY = 'drive_work_days_v1';
-    const MIL_KEY     = 'drive_mil_v1';
+    const ODO_KEY     = 'drive_mil_v1';
     /** data models:
      *  store : { 'YYYY-MM-DD': true }   — drive marks
-     *  mStore: { 'YYYY-MM-DD': number } — mil driven that day
+     *  oStore: { 'YYYY-MM-DD': number } — odometer reading (mätarställning) that day
+     *
+     * Driven mil for any period = last reading on/before period end
+     *                           - last reading strictly before period start
      */
     let store  = load(STORAGE_KEY);
-    let mStore = load(MIL_KEY);
+    let oStore = load(ODO_KEY);
 
     const calEl      = document.getElementById('calendar');
     const monthLabel = document.getElementById('monthLabel');
@@ -186,7 +189,8 @@
     countYearBtn.onclick = ()=>{
       const y = parseInt(countYearSel.value,10);
       countYearOut.textContent = countYear(y);
-      countYearMil.textContent = sumMilYear(y) + ' mil';
+      const mil = drivenInPeriod(new Date(y,0,1), new Date(y,11,31));
+      countYearMil.textContent = mil != null ? fmt(mil) + ' mil' : '—';
     };
 
     rangeBtn.onclick = ()=>{
@@ -194,11 +198,12 @@
       const b = toDate.value   ? new Date(toDate.value)   : null;
       if(!a || !b || a>b){ rangeOut.textContent='—'; rangeMil.textContent='—'; return; }
       rangeOut.textContent = countRange(a,b);
-      rangeMil.textContent = sumMilRange(a,b) + ' mil';
+      const mil = drivenInPeriod(a,b);
+      rangeMil.textContent = mil != null ? fmt(mil) + ' mil' : '—';
     };
 
     exportBtn.onclick = ()=>{
-      const blob = new Blob([JSON.stringify({marks: store, mil: mStore}, null, 2)], {type:'application/json'});
+      const blob = new Blob([JSON.stringify({marks: store, odo: oStore}, null, 2)], {type:'application/json'});
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href = url; a.download = 'drive-to-work-data.json'; a.click();
@@ -213,16 +218,16 @@
         try{
           const data = JSON.parse(fr.result);
           if(typeof data === 'object' && data){
-            // Support old format (plain { 'YYYY-MM-DD': true }) and new format ({ marks, mil })
+            // Support old format (plain { 'YYYY-MM-DD': true }) and new format ({ marks, odo/mil })
             if(data.marks !== undefined){
               store  = data.marks || {};
-              mStore = data.mil   || {};
+              oStore = data.odo || data.mil || {};
             } else {
-              store  = data;  // legacy format
-              mStore = {};
+              store  = data;
+              oStore = {};
             }
             save(STORAGE_KEY, store);
-            save(MIL_KEY, mStore);
+            save(ODO_KEY, oStore);
             render();
             alert('Import complete.');
           } else { alert('Invalid file.'); }
@@ -232,8 +237,8 @@
     };
 
     resetBtn.onclick = ()=>{
-      if(confirm('Erase all saved marks and mil data? This cannot be undone.')){
-        store={}; mStore={}; save(STORAGE_KEY,store); save(MIL_KEY,mStore); render();
+      if(confirm('Erase all saved marks and odometer data? This cannot be undone.')){
+        store={}; oStore={}; save(STORAGE_KEY,store); save(ODO_KEY,oStore); render();
       }
     };
 
@@ -271,7 +276,7 @@
         const inMonth = d.getMonth() === view.getMonth();
         const key     = toKey(d);
         const marked  = !!store[key];
-        const milVal  = mStore[key] != null ? mStore[key] : '';
+        const odoVal  = oStore[key] != null ? oStore[key] : '';
 
         const div = document.createElement('div');
         div.className = 'day' + (marked?' marked':'') + (inMonth?'':' other-month');
@@ -279,14 +284,14 @@
         div.innerHTML = `
           <div class="date">${d.getDate()}</div>
           <div class="tick" role="button" aria-pressed="${marked}" title="Toggle drive mark">${marked ? '✔︎ Marked' : 'Mark'}</div>
-          <div class="mil-wrap">
-            <input class="mil-input" type="number" min="0" step="0.1" placeholder="mil" title="Antal mil denna dag" value="${milVal}">
+          <div class="odo-wrap">
+            <input class="odo-input" type="number" min="0" step="0.1" placeholder="mätarst." title="Mätarställning (mil)" value="${odoVal}">
           </div>
         `;
         div.querySelector('.tick').onclick = ()=> toggleDate(key, div);
 
-        const inp = div.querySelector('.mil-input');
-        inp.addEventListener('change', ()=> saveMil(key, inp));
+        const inp = div.querySelector('.odo-input');
+        inp.addEventListener('change', ()=> saveOdo(key, inp));
         inp.addEventListener('click',  e => e.stopPropagation());
 
         grid.appendChild(div);
@@ -294,7 +299,6 @@
 
       updateStats();
 
-      // default range inputs to visible month
       const y = view.getFullYear(), m = view.getMonth();
       fromDate.value = toISO(new Date(y, m, 1));
       toDate.value   = toISO(new Date(y, m+1, 0));
@@ -311,17 +315,18 @@
       updateStats();
     }
 
-    // ── save mil for a day ────────────────────────────────────────────────────
-    function saveMil(key, inp){
+    // ── save odometer reading for a day ───────────────────────────────────────
+    function saveOdo(key, inp){
       const val = inp.value.trim();
       if(val === '' || isNaN(val)){
-        delete mStore[key];
+        delete oStore[key];
+        inp.value = '';
       } else {
-        const num = Math.round(parseFloat(val) * 10) / 10; // one decimal
-        mStore[key] = Math.max(0, num);
-        inp.value   = mStore[key];
+        const num = Math.round(parseFloat(val) * 10) / 10;
+        oStore[key] = Math.max(0, num);
+        inp.value   = oStore[key];
       }
-      save(MIL_KEY, mStore);
+      save(ODO_KEY, oStore);
       updateStats();
     }
 
@@ -330,17 +335,55 @@
       mCountEl.textContent   = countMonth(y, m);
       yCountEl.textContent   = countYear(y);
       allCountEl.textContent = Object.keys(store).length;
-      mMilEl.textContent     = fmt(sumMilMonth(y, m)) + ' mil';
-      yMilEl.textContent     = fmt(sumMilYear(y))     + ' mil';
-      allMilEl.textContent   = fmt(sumMilAll())        + ' mil';
+
+      const mMil = drivenInPeriod(new Date(y,m,1), new Date(y,m+1,0));
+      const yMil = drivenInPeriod(new Date(y,0,1), new Date(y,11,31));
+      const aMil = drivenAllTime();
+      mMilEl.textContent  = mMil != null ? fmt(mMil) + ' mil' : '— mil';
+      yMilEl.textContent  = yMil != null ? fmt(yMil) + ' mil' : '— mil';
+      allMilEl.textContent = aMil != null ? fmt(aMil) + ' mil' : '— mil';
     }
 
-    // ── clear month ───────────────────────────────────────────────────────────
-    function clearVisibleMonth(){
-      const y=view.getFullYear(), m=view.getMonth();
-      const start=new Date(y,m,1), end=new Date(y,m+1,0);
-      iterateDates(start,end,(d)=>{ const k=toKey(d); if(store[k]) delete store[k]; });
-      save(STORAGE_KEY, store);
+    // ── odometer helpers ──────────────────────────────────────────────────────
+    /**
+     * Returns the last odometer reading on or before `date`, or null if none exists.
+     */
+    function odometerAt(date){
+      const cap = toKey(date);
+      const keys = Object.keys(oStore).filter(k => k <= cap).sort();
+      if(keys.length === 0) return null;
+      return oStore[keys[keys.length - 1]];
+    }
+
+    /**
+     * Driven mil in [start, end] = reading at end - reading just before start.
+     * Returns null if we can't calculate (no readings available).
+     */
+    function drivenInPeriod(start, end){
+      const endReading   = odometerAt(end);
+      if(endReading == null) return null;
+
+      // reading just before period starts
+      const dayBeforeStart = addDays(start, -1);
+      const startReading   = odometerAt(dayBeforeStart);
+
+      if(startReading == null){
+        // No baseline before period — use the earliest reading within period as baseline
+        const cap = toKey(end);
+        const floor = toKey(start);
+        const keys = Object.keys(oStore).filter(k => k >= floor && k <= cap).sort();
+        if(keys.length < 2) return null; // only one reading in period, can't diff
+        return oStore[keys[keys.length-1]] - oStore[keys[0]];
+      }
+
+      const diff = endReading - startReading;
+      return diff >= 0 ? diff : null;
+    }
+
+    function drivenAllTime(){
+      const keys = Object.keys(oStore).sort();
+      if(keys.length < 2) return null;
+      return oStore[keys[keys.length-1]] - oStore[keys[0]];
     }
 
     // ── counting helpers ──────────────────────────────────────────────────────
@@ -356,22 +399,15 @@
       let n=0; iterateDates(a,b,(d)=>{ if(store[toKey(d)]) n++; }); return n;
     }
 
-    // ── mil helpers ───────────────────────────────────────────────────────────
-    function sumMilYear(y){
-      const start=new Date(y,0,1), end=new Date(y,11,31);
-      let s=0; iterateDates(start,end,(d)=>{ const v=mStore[toKey(d)]; if(v) s+=v; }); return s;
-    }
-    function sumMilMonth(y,m){
+    function fmt(n){ return (Math.round(n*10)/10).toLocaleString('sv-SE'); }
+
+    // ── clear month ───────────────────────────────────────────────────────────
+    function clearVisibleMonth(){
+      const y=view.getFullYear(), m=view.getMonth();
       const start=new Date(y,m,1), end=new Date(y,m+1,0);
-      let s=0; iterateDates(start,end,(d)=>{ const v=mStore[toKey(d)]; if(v) s+=v; }); return s;
+      iterateDates(start,end,(d)=>{ const k=toKey(d); if(store[k]) delete store[k]; });
+      save(STORAGE_KEY, store);
     }
-    function sumMilRange(a,b){
-      let s=0; iterateDates(a,b,(d)=>{ const v=mStore[toKey(d)]; if(v) s+=v; }); return s;
-    }
-    function sumMilAll(){
-      return Object.values(mStore).reduce((a,b)=>a+(b||0), 0);
-    }
-    function fmt(n){ return Math.round(n*10)/10; } // one decimal, strip trailing .0
 
     // ── date utilities ────────────────────────────────────────────────────────
     function weekdays(){ return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']; }
